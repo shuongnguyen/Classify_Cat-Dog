@@ -5,10 +5,16 @@ import onnxruntime
 from PIL import Image
 from io import BytesIO
 import json
+import os
 
+current_directory = os.getcwd()
+model_path = os.path.join(current_directory, "my_model.onnx")
+if not model_path:
+    raise Exception("Environment variable ONNX_MODEL_PATH is not set")
 # Load ONNX model
 def load_model(model_path):
     return onnxruntime.InferenceSession(model_path)
+
 
 def classify_image(model, image_data):
     try:
@@ -36,11 +42,14 @@ def classify_image(model, image_data):
     
         return class_name, float(confidence)
     except Exception as e:
-        raise Exception(f"Lỗi phân loại hình ảnh: {str(e)}")
+        raise Exception(f"Error classifying image: {str(e)}")
 
 class ImageClassificationHandler(tornado.web.RequestHandler):
     def initialize(self, model):
         self.model = model
+        
+    async def get(self):
+        self.render("upload_image.html")
 
     async def post(self):
         try:
@@ -56,22 +65,20 @@ class ImageClassificationHandler(tornado.web.RequestHandler):
                 self.write(json.dumps(result))
             else:
                 self.set_status(400)  # Yêu cầu không hợp lệ
-                self.write({"error": "Không có trường 'image' được tìm thấy trong yêu cầu."})
+                self.write({"error": "No 'image' field found in the request."})
         except Exception as e:
             self.set_status(500)  
 
 def make_app(model):
     return tornado.web.Application([
         (r"/classify", ImageClassificationHandler, dict(model=model)),
-    ])
+        (r"/static/(.*)", tornado.web.StaticFileHandler, {"path": "static"})
+    ],
+    template_path=os.path.join(os.getcwd(), "templates"))
 
 if __name__ == "__main__":
-    model_path = 'my_model.onnx' 
-    model = load_model(model_path)
-    
-    
+    app = make_app(load_model(model_path))
 
-    app = make_app(model)
     app.listen(8888)
-    print("Dịch vụ phân loại hình ảnh đang chạy tại http://localhost:8888/classify")
+    print("Image Classification Microservice is running at http://localhost:8888/classify")
     tornado.ioloop.IOLoop.current().start()
