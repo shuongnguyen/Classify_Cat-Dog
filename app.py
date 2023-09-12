@@ -67,7 +67,7 @@ class ImageClassificationHandler(tornado.web.RequestHandler):
                 self.set_status(400)  # Yêu cầu không hợp lệ
                 self.write({"error": "No 'image' field found in the request."})
         except Exception as e:
-            self.set_status(500)  
+            self.set_status(500)  #Lỗi máy chủ
 
 def make_app(model):
     return tornado.web.Application([
