@@ -50,6 +50,8 @@ class ImageClassificationHandler(tornado.web.RequestHandler):
         
     async def get(self):
         self.render("upload_image.html")
+        
+
 
     async def post(self):
         try:
