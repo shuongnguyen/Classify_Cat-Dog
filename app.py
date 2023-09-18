@@ -6,6 +6,7 @@ from PIL import Image
 from io import BytesIO
 import json
 import os
+import logging
 
 current_directory = os.getcwd()
 model_path = os.path.join(current_directory, "my_model.onnx")
@@ -15,7 +16,7 @@ if not model_path:
 def load_model(model_path):
     return onnxruntime.InferenceSession(model_path)
 
-
+# Define the classify_image function
 def classify_image(model, image_data):
     try:
         image = Image.open(BytesIO(image_data))
@@ -24,13 +25,13 @@ def classify_image(model, image_data):
         image_array = image_array.astype(np.float32)
         image_array = np.expand_dims(image_array, axis=0)
 
-        # Thực hiện phân loại hình ảnh
+         #Perform image classification
         input_name = model.get_inputs()[0].name
         output_name = model.get_outputs()[0].name
         result = model.run([output_name], {input_name: image_array})
         
 
-        # Xử lý dự đoán 
+        #Process the prediction 
         predicted_class_index = np.argmax(result)
         confidence = result[0][0][predicted_class_index]
         class_labels = ["cats", "dogs"]  
@@ -44,6 +45,7 @@ def classify_image(model, image_data):
     except Exception as e:
         raise Exception(f"Error classifying image: {str(e)}")
 
+# Create a Tornado request handler for image classification
 class ImageClassificationHandler(tornado.web.RequestHandler):
     def initialize(self, model):
         self.model = model
@@ -51,8 +53,6 @@ class ImageClassificationHandler(tornado.web.RequestHandler):
     async def get(self):
         self.render("upload_image.html")
         
-
-
     async def post(self):
         try:
             if 'image' in self.request.files:
@@ -66,21 +66,25 @@ class ImageClassificationHandler(tornado.web.RequestHandler):
                 self.set_header("Content-Type", "application/json")
                 self.write(json.dumps(result))
             else:
-                self.set_status(400)  # Yêu cầu không hợp lệ
+                self.set_status(400)  # Error request
                 self.write({"error": "No 'image' field found in the request."})
         except Exception as e:
-            self.set_status(500)  #Lỗi máy chủ
+            self.set_status(500)  #Error server
+
 
 def make_app(model):
     return tornado.web.Application([
         (r"/classify", ImageClassificationHandler, dict(model=model)),
-        (r"/static/(.*)", tornado.web.StaticFileHandler, {"path": "static"})
+        (r"/api_caller", ApiCallerHandler), 
+        (r"/static/(.*)", tornado.web.StaticFileHandler, {"path": "static"}),
     ],
     template_path=os.path.join(os.getcwd(), "templates"))
 
 if __name__ == "__main__":
+    logging.basicConfig(filename='api_calls.log', level=logging.INFO)
     app = make_app(load_model(model_path))
+    logging.getLogger().setLevel(logging.ERROR)
 
     app.listen(8888)
-    print("Image Classification Microservice is running at http://localhost:8888/classify")
+    print("Image Classification Microservice is running at http://localhost:8888/api_caller")
     tornado.ioloop.IOLoop.current().start()
