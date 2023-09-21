@@ -103,3 +103,9 @@ TypeError: ApiConnector.__init__() got an unexpected keyword argument 'target_kw
 ERROR:tornado.access:500 POST /classify (::1) 4082.57ms
 ERROR:tornado.access:500 POST /classify (::1) 3374.60ms
 ERROR:tornado.access:500 POST /classify (::1) 3242.16ms
+ERROR:tornado.access:500 POST /classify (::1) 2176.45ms
+ERROR:tornado.access:500 POST /classify (::1) 2084.41ms
+ERROR:tornado.access:500 POST /classify (::1) 2097.69ms
+ERROR:tornado.access:500 POST /classify (::1) 92.82ms
+ERROR:tornado.access:500 POST /classify (::1) 2880.16ms
+ERROR:tornado.access:500 POST /classify (::1) 2352.32ms

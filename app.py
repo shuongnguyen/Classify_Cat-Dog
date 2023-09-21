@@ -19,14 +19,6 @@ if not model_path:
 def load_model(model_path):
     return onnxruntime.InferenceSession(model_path)
 
-'''api_url = "https://bing-image-search1.p.rapidapi.com/images/search"
-api_headers = {
-    "content-type": "application/json",
-    "X-RapidAPI-Key": "8a1621535dmshc2b40537ec58d87p195d12jsnb94e212c6a53",
-    "X-RapidAPI-Host": "bing-image-search1.p.rapidapi.com"
-}
-api_connector = ApiConnector(api_url, api_headers)'''
-
 # Define the classify_image function
 def classify_image(model, image_data):
     try:
@@ -106,5 +98,5 @@ if __name__ == "__main__":
     logging.getLogger().setLevel(logging.ERROR)
 
     app.listen(8888)
-    print("Image Classification Microservice is running at http://localhost:8888/classify")
+    print("Image Classification Microservice is running at http://localhost:8888/")
     tornado.ioloop.IOLoop.current().start()
