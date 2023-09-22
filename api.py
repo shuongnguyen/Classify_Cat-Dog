@@ -1,114 +1,136 @@
+
 import tornado.ioloop
 import tornado.web
-
-import numpy as np
-import onnxruntime
-from PIL import Image
-from io import BytesIO
+import tornado.httpclient
+import certifi
+import ssl
 import json
-import os
 import logging
-import aiohttp
-
-#from api import ApiConnector
 
 
-current_directory = os.getcwd()
-model_path = os.path.join(current_directory, "my_model.onnx")
-if not model_path:
-    raise Exception("Environment variable ONNX_MODEL_PATH is not set")
-# Load ONNX model
-def load_model(model_path):
-    return onnxruntime.InferenceSession(model_path)
+class MyLogger:
+    def __init__(self, filename=None, filemode='a', level=logging.INFO):
+        # Create a logger
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(level)
 
-async def send_image_data_to_api(api_url, api_headers, image_data):
-    async with aiohttp.ClientSession() as session:
-        async with session.post(api_url, headers=api_headers, data=image_data) as response:
-            return await response.text()
-# Define the classify_image function
-def classify_image(model, image_data):
-    try:
-        image = Image.open(BytesIO(image_data))
-        image = image.resize((160, 160))  
-        image_array = np.array(image)
-        image_array = image_array.astype(np.float32)
-        image_array = np.expand_dims(image_array, axis=0)
+        # Create a formatter
+        formatter = logging.Formatter('time="%(asctime)s" level=%(levelname)s service=S3Connector - parameters={%(bucket)s, %(key)s} - description=%(message)s')
 
-         #Perform image classification
-        input_name = model.get_inputs()[0].name
-        output_name = model.get_outputs()[0].name
-        result = model.run([output_name], {input_name: image_array})
-        
+        # Create a console handler and set the formatter
+        ch = logging.StreamHandler()
+        ch.setFormatter(formatter)
+        self.logger.addHandler(ch)
 
-        #Process the prediction 
-        predicted_class_index = np.argmax(result)
-        confidence = result[0][0][predicted_class_index]
-        class_labels = ["cats", "dogs"]  
-        class_name = class_labels[predicted_class_index]
-        if confidence >= 0.5:
-            class_name = "dog"
+        # Create a file handler if a filename is provided and set the formatter
+        if filename:
+            fh = logging.FileHandler(filename, mode=filemode)
+            fh.setFormatter(formatter)
+            self.logger.addHandler(fh)
+
+    def log(self, level, message):
+        if level == 'debug':
+            self.logger.debug(message)
+        elif level == 'info':
+            self.logger.info(message)
+        elif level == 'warning':
+            self.logger.warning(message)
+        elif level == 'error':
+            self.logger.error(message)
+        elif level == 'critical':
+            self.logger.critical(message)
         else:
-            class_name ="cat"
-    
-        return class_name, float(confidence)
-    except Exception as e:
-        raise Exception(f"Error classifying image: {str(e)}")
+            raise ValueError("Invalid log level")
 
-# Create a Tornado request handler for image classification
-class ImageClassificationHandler(tornado.web.RequestHandler):
-    def initialize(self, model, api_url, api_headers):
-        self.model = model
-        self.api_url = api_url
-        self.api_headers = api_headers
+    def debug(self, message):
+        self.log('debug', message)
 
+    def info(self, message):
+        self.log('info', message)
+
+    def warning(self, message):
+        self.log('warning', message)
+
+    def error(self, message):
+        self.log('error', message)
+
+    def critical(self, message):
+        self.log('critical', message)
+
+# Create a logger instance with a filename (optional) and log level
+logger = MyLogger(filename='mylog.log', level=logging.DEBUG)
+
+# Log messages at different levels
+# logger.debug('This is a debug message')
+# logger.info('This is an info message')
+# logger.warning('This is a warning message')
+# logger.error('This is an error message')
+# logger.critical('This is a critical message')
+
+api_config = {
+    'url': "https://text-translator2.p.rapidapi.com",
+    'headers' : {
+	"content-type": "application/x-www-form-urlencoded",
+	"X-RapidAPI-Key": "8a1621535dmshc2b40537ec58d87p195d12jsnb94e212c6a53",
+	"X-RapidAPI-Host": "text-translator2.p.rapidapi.com"
+    }
+}
+
+class body:
+    def __init__(self, source_language, target_language, text):
+        self.source_language = source_language
+        self.target_language = target_language
+        self.text = text
+
+request_body = body(source_language="", target_language="", text="")
+
+request_body_json = json.dumps(request_body.__dict__)
+
+class ConnectorHandler(tornado.web.RequestHandler):
     async def get(self):
-        self.render("upload_image.html")
-        
+        try:
+            response = await self.fetch_url(api_config['url'] + "/getLanguages", api_config['headers'])
+            self.write(response.body.decode('utf-8'))
+        except Exception as e:
+            self.write({'error': str(e)})
+
     async def post(self):
         try:
-            if 'image' in self.request.files:
-                image_data = self.request.files['image'][0]['body']
-                class_name, confidence = classify_image(self.model, image_data)
-                
-                 # Call the ApiConnector to send the image data to an external API
-                api_result = await send_image_data_to_api(self.api_url, self.api_headers, image_data)
-                
-                result = {
-                    "class_name": class_name,
-                    "api_result": api_result,
-                    #"confidence": float(confidence)
-                }
-                self.set_header("Content-Type", "application/json")
-                self.write(json.dumps(result))
-            else:
-                self.set_status(400)  # Error request
-                self.write({"error": "No 'image' field found in the request."})
+            response = await self.fetch_url(api_config['url'] + "/translate", api_config['headers'], method="POST", body=request_body_json)
+            response_text = response.body.decode('utf-8')
+            self.write(response_text)
+            # Log the response for debugging
+            self.logger.info(f"POST Response: Status Code: {response.code}, Body: {response_text}")
         except Exception as e:
-            self.set_status(500)  #Error server
+            self.write({'error': str(e)})
 
 
+    async def fetch_url(self, url, headers, method="GET", body=None):
+        http_client = tornado.httpclient.AsyncHTTPClient()
+        request = tornado.httpclient.HTTPRequest(url, method=method, headers=headers, body=body,  validate_cert=False)
+        return await http_client.fetch(request)
+    
+                                                                                                                                                                                        
 
-def make_app(model, api_url, api_headers):
-    #querystring = {"insightsToken": "</?insightsToken=?&query=cats>", "query": "<OPTIONAL>"}
-    #api_connector = ApiConnector(api_url, querystring)
+def make_app():
     return tornado.web.Application([
-        (r"/classify", ImageClassificationHandler, dict(model=model,  api_url=api_url, api_headers=api_headers)),
-        (r"/static/(.*)", tornado.web.StaticFileHandler, {"path": "static"}),
-    ],
-    template_path=os.path.join(os.getcwd(), "templates"))
+        (r'/api', ConnectorHandler),
+    ])
 
 if __name__ == "__main__":
-    api_url = "https://bing-image-search1.p.rapidapi.com"
-    api_headers = {
-        "content-type": "application/form-data",
-        "X-RapidAPI-Key": "8a1621535dmshc2b40537ec58d87p195d12jsnb94e212c6a53",
-        "X-RapidAPI-Host": "bing-image-search1.p.rapidapi.com"
-    }
-    
-    logging.basicConfig(filename='api_calls.log', level=logging.INFO)
-    app = make_app(load_model(model_path), api_url, api_headers)
-    logging.getLogger().setLevel(logging.ERROR)
+    app = make_app()
+    app.listen(8888)  
+    print("Server is running at http://localhost:8888/api")
+    # num_api_calls = 1000
+    # async def call_apis():
+    #     futures = []
+    #     for _ in range(num_api_calls):
+    #         # Choose whether to make GET or POST request
+    #         if _ % 2 == 0:
+    #             future = tornado.httpclient.AsyncHTTPClient().fetch(f"http://localhost:8888/api", method="GET")
+    #         else:
+    #             future = tornado.httpclient.AsyncHTTPClient().fetch(f"http://localhost:8888/api", method="POST", body=json.dumps(request_body))
+    #         futures.append(future)
 
-    app.listen(8888)
-    print("Image Classification Microservice is running at http://localhost:8888/classify")
+        # await tornado.gen.multi(futures)
     tornado.ioloop.IOLoop.current().start()
