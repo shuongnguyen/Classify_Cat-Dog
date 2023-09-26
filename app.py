@@ -8,7 +8,6 @@ from io import BytesIO
 import json
 import os
 import logging
-#from api import ApiConnector
 
 
 current_directory = os.getcwd()
@@ -50,9 +49,9 @@ def classify_image(model, image_data):
 
 # Create a Tornado request handler for image classification
 class ImageClassificationHandler(tornado.web.RequestHandler):
-    def initialize(self, model): #api_connector):
+    def initialize(self, model): 
         self.model = model
-        #self.api_connector = api_connector
+        
         
     async def get(self):
         self.render("upload_image.html")
@@ -62,14 +61,8 @@ class ImageClassificationHandler(tornado.web.RequestHandler):
             if 'image' in self.request.files:
                 image_data = self.request.files['image'][0]['body']
                 class_name, confidence = classify_image(self.model, image_data)
-                
-                 # Call the ApiConnector to send the image data to an external API
-                #api_result = await self.api_connector.send_image_data(image_data)
-
-
                 result = {
                     "class_name": class_name,
-                    #"api_result": api_result,
                     #"confidence": float(confidence)
                 }
                 self.set_header("Content-Type", "application/json")
@@ -83,20 +76,16 @@ class ImageClassificationHandler(tornado.web.RequestHandler):
 
 
 def make_app(model):
-    #api_url = "https://bing-image-search1.p.rapidapi.com/images/search"
-    #querystring = {"insightsToken": "</?insightsToken=?&query=cats>", "query": "<OPTIONAL>"}
-    #api_connector = ApiConnector(api_url, querystring)
     return tornado.web.Application([
-        (r"/classify", ImageClassificationHandler, dict(model=model)), #api_connector=api_connector)),
+        (r"/classify", ImageClassificationHandler, dict(model=model)), 
         (r"/static/(.*)", tornado.web.StaticFileHandler, {"path": "static"}),
     ],
     template_path=os.path.join(os.getcwd(), "templates"))
 
 if __name__ == "__main__":
-    logging.basicConfig(filename='api_calls.log', level=logging.INFO)
     app = make_app(load_model(model_path))
     logging.getLogger().setLevel(logging.ERROR)
 
     app.listen(8888)
-    print("Image Classification Microservice is running at http://localhost:8888/")
+    print("Image Classification Microservice is running at http://localhost:8888/classify")
     tornado.ioloop.IOLoop.current().start()
